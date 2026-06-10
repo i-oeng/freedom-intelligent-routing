@@ -50,10 +50,17 @@ def apply_skills(df, ticket, ai_data):
     return res
 
 def route_ticket(ticket_id, engine, ai_data):
+    ticket_id = int(ticket_id)
     with engine.connect() as conn:
-        ticket = conn.execute(text(f"SELECT * FROM tickets WHERE id = {ticket_id}")).mappings().fetchone()
+        ticket = conn.execute(
+            text("SELECT * FROM tickets WHERE id = :ticket_id"),
+            {"ticket_id": ticket_id},
+        ).mappings().fetchone()
         managers_df = pd.read_sql("SELECT * FROM managers", con=engine)
         offices_df = pd.read_sql("SELECT * FROM business_units", con=engine)
+
+    if ticket is None:
+        raise ValueError(f"Ticket {ticket_id} not found.")
 
     target_office = None
     eligible_managers = pd.DataFrame()
@@ -78,7 +85,7 @@ def route_ticket(ticket_id, engine, ai_data):
         if not client_coords:
 
             target_office = 'Астана' if ticket_id % 2 == 0 else 'Алматы'
-            eligible_managers = apply_skills(managers_df[managers_df['unit_name'].str.contains(target_office, case=False)], ticket, ai_data)
+            eligible_managers = apply_skills(managers_df[managers_df['unit_name'].str.contains(target_office, case=False, na=False)], ticket, ai_data)
         else:
             distances = []
             for _, office in offices_df.iterrows():
@@ -108,22 +115,19 @@ def route_ticket(ticket_id, engine, ai_data):
 
 
     eligible_managers = eligible_managers.sort_values(by=['current_load', 'id'])
-    
-    if len(eligible_managers) >= 2:
-        top_2 = eligible_managers.head(2)
-        chosen_index = ticket_id % 2
-        chosen_manager = top_2.iloc[chosen_index]
-    else:
-        chosen_manager = eligible_managers.iloc[0]
+    min_load = eligible_managers['current_load'].min()
+    least_loaded = eligible_managers[eligible_managers['current_load'] == min_load].sort_values(by='id')
+    chosen_index = ticket_id % len(least_loaded)
+    chosen_manager = least_loaded.iloc[chosen_index]
 
     chosen_manager_id = int(chosen_manager['id'])
 
 
     with engine.begin() as conn:
-        conn.execute(text(f"""
+        conn.execute(text("""
             UPDATE managers 
             SET "current_load" = "current_load" + 1 
-            WHERE id = {chosen_manager_id}
-        """))
+            WHERE id = :manager_id
+        """), {"manager_id": chosen_manager_id})
         
-    return chosen_manager['full_name'], target_office
+    return chosen_manager['full_name'], target_office, chosen_manager_id

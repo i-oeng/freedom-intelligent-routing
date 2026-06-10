@@ -1,25 +1,22 @@
-import os
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 import plotly.express as px
-from main import analyze_ticket_text 
-from dotenv import load_dotenv
+from config import MissingConfigError, get_engine
+from main import analyze_ticket_text
 from router import route_ticket
 from langchain_openai import ChatOpenAI
-from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 import concurrent.futures
 
 
-load_dotenv(".env.local")
-DATABASE_URL = os.environ.get("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
+st.set_page_config(page_title="Freedom Ticket Routing", layout="wide")
 
-if not DATABASE_URL:
-    st.error("DATABASE_URL не найден в .env.local.")
+try:
+    engine = get_engine()
+except MissingConfigError as exc:
+    st.error(str(exc))
     st.stop()
 
-st.set_page_config(page_title="Freedom Ticket Routing", layout="wide")
 st.title("Intelligent CRM Routing")
 
 
@@ -72,10 +69,12 @@ st.divider()
 
 st.header("Анализ")
 
+pending_tickets = 0
+
 try:
     total_tickets = pd.read_sql("SELECT COUNT(*) FROM tickets", engine).iloc[0,0]
     processed_tickets = pd.read_sql("SELECT COUNT(*) FROM routing_results", engine).iloc[0,0]
-    pending_tickets = total_tickets - processed_tickets
+    pending_tickets = max(total_tickets - processed_tickets, 0)
     
     col1, col2, col3 = st.columns(3)
     col1.metric("Всего обращений", total_tickets)
@@ -91,14 +90,22 @@ if pending_tickets > 0:
 
     if st.button("Запустить анализ"):
         
-        query_unprocessed = f"""
-            SELECT id, description, attachment 
-            FROM tickets 
-            WHERE id NOT IN (SELECT ticket_id FROM routing_results)
+        query_unprocessed = text("""
+            SELECT id, description, attachment
+            FROM tickets t
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM routing_results r
+                WHERE r.ticket_id = t.id
+            )
             ORDER BY id DESC 
-            LIMIT {num_to_process}
-        """
-        df_unprocessed = pd.read_sql(query_unprocessed, engine)
+            LIMIT :limit
+        """)
+        df_unprocessed = pd.read_sql(query_unprocessed, engine, params={"limit": int(num_to_process)})
+
+        if df_unprocessed.empty:
+            st.info("Нет новых тикетов для анализа.")
+            st.stop()
         
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -132,20 +139,14 @@ if pending_tickets > 0:
             ai_data = ai_responses[tid]
             
 
-            assigned_name, office = route_ticket(tid, engine, ai_data)
+            assigned_name, office, mgr_id = route_ticket(tid, engine, ai_data)
             
 
             insert_query = text("""
                 INSERT INTO routing_results (ticket_id, ai_type, ai_sentiment, ai_priority, ai_language, ai_summary, assigned_manager_id)
                 VALUES (:tid, :typ, :sen, :pri, :lan, :sum, :mgr)
             """)
-            
-            manager_id_query = text(f"SELECT id FROM managers WHERE full_name = '{assigned_name}'")
-            
             with engine.begin() as conn:
-                mgr_id_result = conn.execute(manager_id_query).fetchone()
-                mgr_id = mgr_id_result[0] if mgr_id_result else None
-                
                 conn.execute(insert_query, {
                     "tid": tid, "typ": ai_data['ticket_type'], "sen": ai_data['sentiment'],
                     "pri": ai_data['priority'], "lan": ai_data['language'], "sum": ai_data['summary'],
@@ -218,30 +219,29 @@ st.header("ИИ-Аналитик")
 st.write("Задавайте любые вопросы по распределенным тикетам.")
 
 if 'df_final_results' in locals() and not df_final_results.empty:
-    
-    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
-    
-
-    agent = create_pandas_dataframe_agent(
-        llm, 
-        df_final_results, 
-        verbose=True, 
-        agent_type="openai-tools",
-        allow_dangerous_code=True 
-    )
-    
-
     user_question = st.text_input("Ваш запрос (например: Выведи топ-3 менеджеров по количеству назначенных тикетов):")
     
     if st.button("Спросить ИИ-Аналитика"):
         if user_question:
             with st.spinner("Анализирую массив данных..."):
                 try:
+                    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+                    analysis_sample = df_final_results.head(200).to_csv(index=False)
+                    response = llm.invoke([
+                        (
+                            "system",
+                            "Ты CRM-аналитик. Отвечай только по предоставленному CSV. "
+                            "Не выполняй код и не выдумывай отсутствующие данные."
+                        ),
+                        (
+                            "human",
+                            f"Всего строк в таблице: {len(df_final_results)}. "
+                            f"Ниже максимум 200 строк CSV:\n{analysis_sample}\n\n"
+                            f"Вопрос: {user_question}"
+                        ),
+                    ])
 
-                    response = agent.invoke(user_question)
-                    
-
-                    st.success(response["output"])
+                    st.success(response.content)
                     
                 except Exception as e:
                     st.error(f"Произошла ошибка при анализе: {e}")

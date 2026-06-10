@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+.streamlit/secrets.toml
+
+*.rar
+*.zip
+
+eval/
+THE F.I.R.E. CHALLENGE/

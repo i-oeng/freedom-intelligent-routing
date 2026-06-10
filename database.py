@@ -1,17 +1,17 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, ForeignKey
+import sys
+
+from sqlalchemy import Column, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
-from dotenv import load_dotenv
-import os
-load_dotenv(".env.local")
-DATABASE_URL = os.environ.get("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
 
-if not DATABASE_URL:
-    st.error("DATABASE_URL не найден в .env.local.")
-    st.stop()
+from config import MissingConfigError, get_engine
 
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+try:
+    engine = get_engine()
+except MissingConfigError:
+    engine = None
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine) if engine else None
 Base = declarative_base()
 
 
@@ -50,8 +50,8 @@ class Ticket(Base):
 class RoutingResult(Base):
     __tablename__ = "routing_results"
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, ForeignKey("tickets.id"))
-    assigned_manager_id = Column(Integer, ForeignKey("managers.id"))
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False, unique=True, index=True)
+    assigned_manager_id = Column(Integer, ForeignKey("managers.id"), nullable=False)
 
     ai_type = Column(String)
     ai_sentiment = Column(String)
@@ -61,13 +61,17 @@ class RoutingResult(Base):
 
 
 
-def init_db():
-    print("Dropping old tables...")
-    Base.metadata.drop_all(bind=engine) 
+def init_db(reset: bool = False):
+    db_engine = get_engine()
+    if reset:
+        print("Dropping old tables...")
+        Base.metadata.drop_all(bind=db_engine)
     print("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=db_engine)
     print("Tables created successfully!")
 
 if __name__ == "__main__":
-    init_db()
-
+    try:
+        init_db(reset="--reset" in sys.argv)
+    except MissingConfigError as exc:
+        raise SystemExit(str(exc)) from exc
