@@ -1,7 +1,9 @@
 # Intelligent CRM Routing
 **Built for the Datasaur Hackathon**
 
-Streamlit app for CRM ticket ingestion, AI classification, manager routing, and result export.
+Streamlit app for CRM ticket ingestion, AI classification, manager routing, operational dashboards, and result export.
+
+This repo also includes neutral integration blueprints that show how the workflow can connect to automation tools such as n8n, Make/Zapier, Airtable, Retool, and Supabase-style stacks.
 
 ## How to Run Locally
 
@@ -49,6 +51,22 @@ streamlit run app.py
 2. Review raw data
 3. Launch AI
 4. Export results 
+
+## Technical Showcase
+
+- Streamlit internal dashboard for operators
+- OpenAI structured extraction and summarization
+- SQLAlchemy/Postgres-backed workflow state
+- Business-rule routing with skills, language, geography, VIP status, and workload balancing
+- Attachment-aware document/screenshot processing path
+- n8n workflow blueprint for webhook-based CRM automation
+- Portfolio talking points for presenting the project without rebranding it for a specific company
+
+See:
+
+- `integrations/README.md`
+- `integrations/n8n/ticket-routing-workflow.example.json`
+- `docs/portfolio_talking_points.md`
 
 ## Verification
 

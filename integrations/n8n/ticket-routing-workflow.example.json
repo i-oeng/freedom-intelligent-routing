@@ -1,0 +1,170 @@
+{
+  "name": "CRM Ticket Routing Automation Example",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-ticket-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-intake",
+      "name": "Webhook Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "client-guid",
+              "name": "client_guid",
+              "type": "string",
+              "value": "={{ $json.body.client_guid }}"
+            },
+            {
+              "id": "description",
+              "name": "description",
+              "type": "string",
+              "value": "={{ $json.body.description }}"
+            },
+            {
+              "id": "segment",
+              "name": "segment",
+              "type": "string",
+              "value": "={{ $json.body.segment || 'Mass' }}"
+            },
+            {
+              "id": "city",
+              "name": "city",
+              "type": "string",
+              "value": "={{ $json.body.city }}"
+            },
+            {
+              "id": "attachment",
+              "name": "attachment",
+              "type": "string",
+              "value": "={{ $json.body.attachment }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normalize-payload",
+      "name": "Normalize Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={\"model\":\"gpt-5-mini\",\"messages\":[{\"role\":\"system\",\"content\":\"Classify this CRM ticket into type, sentiment, priority, language, and one sentence summary. Return compact JSON only.\"},{\"role\":\"user\",\"content\":$json.description}],\"response_format\":{\"type\":\"json_object\"}}",
+        "options": {}
+      },
+      "id": "ai-classification",
+      "name": "AI Classification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO tickets (client_guid, description, segment, city, attachment) VALUES ($1, $2, $3, $4, $5) RETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$node['Normalize Payload'].json.client_guid, $node['Normalize Payload'].json.description, $node['Normalize Payload'].json.segment, $node['Normalize Payload'].json.city, $node['Normalize Payload'].json.attachment] }}"
+        }
+      },
+      "id": "store-ticket",
+      "name": "Store Ticket",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'queued', ticket_id: $json.id, next_step: 'route_ticket' } }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Intake": {
+      "main": [
+        [
+          {
+            "node": "Normalize Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Payload": {
+      "main": [
+        [
+          {
+            "node": "AI Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Classification": {
+      "main": [
+        [
+          {
+            "node": "Store Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Ticket": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
