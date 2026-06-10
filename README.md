@@ -9,8 +9,8 @@ This repo also includes neutral integration blueprints that show how the workflo
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/i-oeng/datasaur_fire.git
-cd datasaur_fire
+git clone https://github.com/i-oeng/datasaur_fire.git](https://github.com/i-oeng/freedom-intelligent-routing.git
+cd freedom-intelligent-routing
 ```
 **2. Set up the virtual environment & install dependencies**
 
