@@ -69,7 +69,7 @@ def encode_image(image_path):
 
 def analyze_ticket_text(description_text: str, image_path: str = None) -> dict:
 
-    system_prompt = "Ты ИИ-ассистент Freedom Bank. Выяви проблему по тексту и/или скриншоту."
+    system_prompt = "Ты ИИ-ассистент. Выяви проблему по тексту и/или скриншоту."
 
     content = []
     
