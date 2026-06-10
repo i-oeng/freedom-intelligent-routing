@@ -26,7 +26,8 @@ Copy `.env.example` to `.env.local` and add your local values.
 
 ```bash
 DATABASE_URL="your_database_url"
-OPENAI_API_KEY="your_api_key"
+ANTHROPIC_API_KEY="your_api_key"
+ANTHROPIC_MODEL="claude-haiku-4-5"
 ```
 
 **4. Initialize and load reference data**
@@ -55,7 +56,7 @@ streamlit run app.py
 ## Technical Showcase
 
 - Streamlit internal dashboard for operators
-- OpenAI structured extraction and summarization
+- Anthropic Claude structured extraction and summarization
 - SQLAlchemy/Postgres-backed workflow state
 - Business-rule routing with skills, language, geography, VIP status, and workload balancing
 - Attachment-aware document/screenshot processing path
@@ -67,10 +68,12 @@ See:
 - `integrations/README.md`
 - `integrations/n8n/ticket-routing-workflow.example.json`
 - `docs/portfolio_talking_points.md`
+- `docs/model_n8n_supabase_guide.md`
+- `docs/supabase_setup.md`
 
 ## Verification
 
 ```bash
-python -m py_compile app.py main.py router.py database.py load.py config.py
+python -m py_compile app.py main.py router.py database.py load.py config.py scripts/check_supabase.py
 python -m unittest discover
 ```

@@ -4,15 +4,15 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from anthropic import Anthropic
 from pydantic import BaseModel, Field
-from openai import OpenAI
 
-from config import DATA_DIR, PROJECT_ROOT
+from config import DATA_DIR, PROJECT_ROOT, get_anthropic_model
 
 
 @lru_cache(maxsize=1)
 def get_client():
-    return OpenAI()
+    return Anthropic()
 
 
 class TicketAnalysis(BaseModel):
@@ -84,24 +84,36 @@ def analyze_ticket_text(description_text: str, image_path: str = None) -> dict:
         if base64_image:
             mime_type = mimetypes.guess_type(str(resolved_image_path))[0] or "image/jpeg"
             content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:{mime_type};base64,{base64_image}",
-                    "detail": "low" 
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": base64_image,
                 }
             })
 
     try:
-        response = get_client().beta.chat.completions.parse(
-            model="gpt-5-mini", 
+        response = get_client().messages.create(
+            model=get_anthropic_model(),
+            max_tokens=500,
+            temperature=0,
+            system=system_prompt,
             messages=[
-                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": content}
             ],
-            response_format=TicketAnalysis,
+            tools=[{
+                "name": "classify_ticket",
+                "description": "Classify and summarize a CRM support ticket.",
+                "input_schema": TicketAnalysis.model_json_schema(),
+            }],
+            tool_choice={"type": "tool", "name": "classify_ticket"},
         )
-        
-        return response.choices[0].message.parsed.model_dump()
+
+        for block in response.content:
+            if block.type == "tool_use" and block.name == "classify_ticket":
+                return TicketAnalysis.model_validate(block.input).model_dump()
+
+        raise ValueError("Anthropic response did not include classify_ticket tool output.")
         
     except Exception as e:
         print(f"AI Error: {e}")
@@ -112,3 +124,25 @@ def analyze_ticket_text(description_text: str, image_path: str = None) -> dict:
             "language": "RU",
             "summary": "Ошибка ИИ."
         }
+
+
+def answer_results_question(question: str, df_final_results) -> str:
+    analysis_sample = df_final_results.head(200).to_csv(index=False)
+    prompt = (
+        f"Всего строк в таблице: {len(df_final_results)}.\n"
+        f"Ниже максимум 200 строк CSV:\n{analysis_sample}\n\n"
+        f"Вопрос: {question}"
+    )
+
+    response = get_client().messages.create(
+        model=get_anthropic_model(),
+        max_tokens=700,
+        temperature=0,
+        system=(
+            "Ты CRM-аналитик. Отвечай только по предоставленному CSV. "
+            "Не выполняй код и не выдумывай отсутствующие данные."
+        ),
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return "".join(block.text for block in response.content if block.type == "text").strip()

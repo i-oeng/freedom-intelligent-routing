@@ -1,6 +1,5 @@
 geopy==2.4.1
-langchain-openai==1.1.10
-openai==2.21.0
+anthropic==0.83.0
 pandas==2.3.3
 plotly==6.5.2
 psycopg2-binary==2.9.11

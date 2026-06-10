@@ -3,9 +3,8 @@ import pandas as pd
 from sqlalchemy import text
 import plotly.express as px
 from config import MissingConfigError, get_engine
-from main import analyze_ticket_text
+from main import analyze_ticket_text, answer_results_question
 from router import route_ticket
-from langchain_openai import ChatOpenAI
 import concurrent.futures
 
 
@@ -225,23 +224,8 @@ if 'df_final_results' in locals() and not df_final_results.empty:
         if user_question:
             with st.spinner("Анализирую массив данных..."):
                 try:
-                    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
-                    analysis_sample = df_final_results.head(200).to_csv(index=False)
-                    response = llm.invoke([
-                        (
-                            "system",
-                            "Ты CRM-аналитик. Отвечай только по предоставленному CSV. "
-                            "Не выполняй код и не выдумывай отсутствующие данные."
-                        ),
-                        (
-                            "human",
-                            f"Всего строк в таблице: {len(df_final_results)}. "
-                            f"Ниже максимум 200 строк CSV:\n{analysis_sample}\n\n"
-                            f"Вопрос: {user_question}"
-                        ),
-                    ])
-
-                    st.success(response.content)
+                    response = answer_results_question(user_question, df_final_results)
+                    st.success(response)
                     
                 except Exception as e:
                     st.error(f"Произошла ошибка при анализе: {e}")

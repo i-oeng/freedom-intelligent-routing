@@ -71,12 +71,21 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.openai.com/v1/chat/completions",
+        "url": "https://api.anthropic.com/v1/messages",
         "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "openAiApi",
+        "nodeCredentialType": "httpHeaderAuth",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={\"model\":\"gpt-5-mini\",\"messages\":[{\"role\":\"system\",\"content\":\"Classify this CRM ticket into type, sentiment, priority, language, and one sentence summary. Return compact JSON only.\"},{\"role\":\"user\",\"content\":$json.description}],\"response_format\":{\"type\":\"json_object\"}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "jsonBody": "={\"model\":\"claude-haiku-4-5\",\"max_tokens\":500,\"temperature\":0,\"system\":\"Classify this CRM ticket into type, sentiment, priority, language, and one sentence summary. Return compact JSON only.\",\"messages\":[{\"role\":\"user\",\"content\":$json.description}]}",
         "options": {}
       },
       "id": "ai-classification",

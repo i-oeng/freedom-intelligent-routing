@@ -24,6 +24,10 @@ def get_required_env(name: str) -> str:
     return value
 
 
+def get_optional_env(name: str, default: str) -> str:
+    return os.environ.get(name, default)
+
+
 @lru_cache(maxsize=1)
 def get_database_url() -> str:
     return get_required_env("DATABASE_URL")
@@ -32,3 +36,8 @@ def get_database_url() -> str:
 @lru_cache(maxsize=1)
 def get_engine():
     return create_engine(get_database_url())
+
+
+@lru_cache(maxsize=1)
+def get_anthropic_model() -> str:
+    return get_optional_env("ANTHROPIC_MODEL", "claude-haiku-4-5")

@@ -11,11 +11,11 @@ Use this project as a technical proof of how you build practical internal system
 - Encoded business rules for skill matching, language routing, VIP handling, geography, and workload balancing.
 - Added exportable results and an analyst Q&A flow.
 - Added tests around routing behavior and attachment resolution.
-- Added an n8n workflow blueprint showing how webhook automation could connect forms, CRMs, AI enrichment, and PostgreSQL.
+- Added an n8n workflow blueprint showing how webhook automation could connect forms, CRMs, Claude enrichment, and PostgreSQL.
 
 ## How To Connect It To Automation Tools
 
-- **n8n:** webhook intake, OpenAI enrichment, Postgres insert, notification, and downstream routing trigger.
+- **n8n:** webhook intake, Anthropic Claude enrichment, Postgres insert, notification, and downstream routing trigger.
 - **Make/Zapier:** same workflow as form submission -> AI enrichment -> database/CRM update -> Slack or email alert.
 - **Airtable:** lightweight CRM table for tickets, managers, routing status, and document review queues.
 - **Retool:** internal admin UI on top of the same database for operations teams.
