@@ -1,5 +1,5 @@
 # Intelligent CRM Routing
-**Built for the Datasaur Hackathon**
+**Built for the Datasaur Hackathon, but later adapted as a fun project**
 
 Streamlit app for CRM ticket ingestion, AI classification, manager routing, operational dashboards, and result export.
 
