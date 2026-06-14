@@ -2,7 +2,7 @@ import unittest
 
 from sqlalchemy import create_engine, text
 
-from main import resolve_image_path
+from main import TicketAnalysis, resolve_image_path
 from router import route_ticket
 
 
@@ -85,6 +85,22 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(name, "Almaty Low")
         self.assertEqual(office, "Алматы")
         self.assertEqual(manager_id, 3)
+
+
+class TicketAnalysisValidationTests(unittest.TestCase):
+    def test_normalizes_near_miss_ticket_type(self):
+        analysis = TicketAnalysis.model_validate({
+            "ticket_type": "Нерабочеспособность приложения",
+            "sentiment": "негативный",
+            "priority": 12,
+            "language": "ru",
+            "summary": "Ошибка при отправке приказа.",
+        })
+
+        self.assertEqual(analysis.ticket_type, "Неработоспособность приложения")
+        self.assertEqual(analysis.sentiment, "Негативный")
+        self.assertEqual(analysis.priority, 10)
+        self.assertEqual(analysis.language, "RU")
 
 
 if __name__ == "__main__":

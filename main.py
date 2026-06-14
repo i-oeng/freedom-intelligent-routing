@@ -1,11 +1,13 @@
 import base64
+import difflib
 import mimetypes
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from anthropic import Anthropic
-from pydantic import BaseModel, Field
+from anthropic import APIConnectionError, APIStatusError, APITimeoutError, Anthropic, RateLimitError
+from pydantic import BaseModel, Field, field_validator
 
 from config import DATA_DIR, PROJECT_ROOT, get_anthropic_model
 
@@ -13,6 +15,50 @@ from config import DATA_DIR, PROJECT_ROOT, get_anthropic_model
 @lru_cache(maxsize=1)
 def get_client():
     return Anthropic()
+
+
+TICKET_TYPES = [
+    "Жалоба",
+    "Смена данных",
+    "Консультация",
+    "Претензия",
+    "Неработоспособность приложения",
+    "Мошеннические действия",
+    "Спам",
+]
+
+SENTIMENTS = ["Позитивный", "Нейтральный", "Негативный"]
+LANGUAGES = ["KZ", "ENG", "RU"]
+
+
+def normalize_choice(value, allowed_values, default):
+    if value is None:
+        return default
+
+    cleaned = str(value).strip()
+    if cleaned in allowed_values:
+        return cleaned
+
+    lowered = cleaned.lower()
+    for allowed in allowed_values:
+        if lowered == allowed.lower():
+            return allowed
+
+    match = difflib.get_close_matches(cleaned, allowed_values, n=1, cutoff=0.62)
+    return match[0] if match else default
+
+
+def create_message_with_retries(**kwargs):
+    last_error = None
+    for attempt in range(3):
+        try:
+            return get_client().messages.create(**kwargs)
+        except (APIConnectionError, APITimeoutError, RateLimitError, APIStatusError) as exc:
+            last_error = exc
+            if attempt == 2:
+                break
+            time.sleep(1.5 * (attempt + 1))
+    raise last_error
 
 
 class TicketAnalysis(BaseModel):
@@ -41,6 +87,30 @@ class TicketAnalysis(BaseModel):
     summary: str = Field(
         description="Краткая суть (1 предложение) + рекомендация."
     )
+
+    @field_validator("ticket_type", mode="before")
+    @classmethod
+    def normalize_ticket_type(cls, value):
+        return normalize_choice(value, TICKET_TYPES, "Консультация")
+
+    @field_validator("sentiment", mode="before")
+    @classmethod
+    def normalize_sentiment(cls, value):
+        return normalize_choice(value, SENTIMENTS, "Нейтральный")
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def normalize_language(cls, value):
+        return normalize_choice(str(value).upper() if value is not None else value, LANGUAGES, "RU")
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def normalize_priority(cls, value):
+        try:
+            priority = int(value)
+        except (TypeError, ValueError):
+            return 1
+        return min(max(priority, 1), 10)
 
 
 def resolve_image_path(image_path):
@@ -93,7 +163,7 @@ def analyze_ticket_text(description_text: str, image_path: str = None) -> dict:
             })
 
     try:
-        response = get_client().messages.create(
+        response = create_message_with_retries(
             model=get_anthropic_model(),
             max_tokens=500,
             temperature=0,
@@ -134,7 +204,7 @@ def answer_results_question(question: str, df_final_results) -> str:
         f"Вопрос: {question}"
     )
 
-    response = get_client().messages.create(
+    response = create_message_with_retries(
         model=get_anthropic_model(),
         max_tokens=700,
         temperature=0,

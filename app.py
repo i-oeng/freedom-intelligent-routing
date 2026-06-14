@@ -119,7 +119,7 @@ if pending_tickets > 0:
             return row['id'], analyze_ticket_text(row['description'], image_path=img_path)
 
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_to_ticket = {executor.submit(fetch_ai, row): row for _, row in df_unprocessed.iterrows()}
             
             completed_ai = 0
